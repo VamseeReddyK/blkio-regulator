@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<General-info>
+    <Driver-name>blkio_regulator</Driver-name>
+    <Toolchain>Linux GCC</Toolchain>
+    <Architecture>x86_64</Architecture>
+    <hostMachineKernel>true</hostMachineKernel>
+    <Kernel-Version>/home/vamsee/Work/linux-4.10.10</Kernel-Version>
+    <Licence>GPL</Licence>
+    <Author-name>vamsee</Author-name>
+    <location>/home/vamsee/Link+/link_workspace</location>
+    <wizardType>false</wizardType>
+    <wizardTypeInfo>false</wizardTypeInfo>
+</General-info>

@@ -1,0 +1,1 @@
+cmd_/home/vamsee/blk_io_project/blkio_regulator/KERN_SRC/blkio_regulator.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/vamsee/blk_io_project/blkio_regulator/KERN_SRC/blkio_regulator.ko /home/vamsee/blk_io_project/blkio_regulator/KERN_SRC/blkio_regulator.o /home/vamsee/blk_io_project/blkio_regulator/KERN_SRC/blkio_regulator.mod.o ;  true
