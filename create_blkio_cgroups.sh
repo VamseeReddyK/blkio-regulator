@@ -45,7 +45,7 @@ declare -a jobs
 JOBS=0
 run=false
 re='^[0-9]+$'
-while [ $# -gt 1 ]
+while [ $# -ge 1 ]
 do
 	case $1 in
 	    -g|--cgroup_jobs)
