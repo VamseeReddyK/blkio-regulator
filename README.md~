@@ -33,11 +33,5 @@
   $ sudo insmod blkio_regulator.ko
 
 4. unload the module after testing
---------------------------------------------------------------
+---------------------------------------
   $ sudo rmmod blkio_regulator
-
-
-
-# Testing
-
-Create block io cgroups script is used to create control groups along with their weights 
