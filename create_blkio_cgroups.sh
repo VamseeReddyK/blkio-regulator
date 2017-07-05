@@ -3,7 +3,8 @@
 error (){
 echo $0: usage: "
 		-g|cgroups (number of control groups)
-		-w|weight  (weight of the control groups)"
+		-w|weight  (weight of the control groups)
+		-r|run (run cgroups)"
 exit 1	
 }
 
@@ -11,7 +12,7 @@ if [ ! $# -gt 1 ]; then
 	error    
 fi
 
-DIRECTORY=/sys/fs/cgroup/blkio/group_
+DIRECTORY=/sys/fs/cgroup/blkio/user_
 create_groups () {
 jobs=("${@}")
 job=0
@@ -60,7 +61,7 @@ do
 	    while [ $job -lt $JOBS ]
 	    do
 		if ! [[ $2 =~ $re ]] ; then
-		   echo $0: "weight of the groups not mentioned" 
+		   echo $0: "weight of the groups not mentioned"
 		   exit 1
 		fi
 		jobs=("${jobs[@]} $2")
@@ -85,13 +86,14 @@ fi
 sudo mount -t tmpfs cgroup_root /sys/fs/cgroup
 sudo mkdir /sys/fs/cgroup/blkio
 sudo mount -t cgroup blkio -o blkio /sys/fs/cgroup/blkio/
+
 create_groups "${jobs[@]}"
 if [ $? -ne 0 ]; then
 	error
 fi
 
 if $run ; then
-	./run_iozone.sh -g $JOBS 
+	./run_iozone.sh -g $JOBS
 fi
 
 #start_work() {
