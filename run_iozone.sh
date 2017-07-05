@@ -21,14 +21,14 @@ fi
 sync=100
 coe3=100
 python cat_cgroup_io.py
-while [ $sync -le 200 ]
+while [ $sync -le 400 ]
 do
 echo $sync | sudo tee /sys/block/sda/queue/iosched/slice_sync
 
 #test 1: time idle is a constant (8ms)
 #test 2: time idle is varied from 0 to 128ms
 idle=8
-coe2=1
+coe2=8
 while [ $idle -le 8 ]
 do 
 echo $idle | sudo tee /sys/block/sda/queue/iosched/slice_idle
