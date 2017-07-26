@@ -45,6 +45,7 @@ struct regulator_data{
 	struct timer_list fb_timer;
 	struct dispatched_requests_list dsp_req_head;
 	unsigned long int data_len;
+	unsigned long int iops;
 };
 
 struct blk_device_list {

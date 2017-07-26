@@ -40,17 +40,25 @@ static void unalloc_regulator(struct regulator_data *rgld){
  */
 static void update_iops(struct regulator_data *rgld){
 	struct cfq_data *cfqd = rgld->q->elevator->elevator_data;
-	unsigned int iops =cfqd->cfq_slice_async_rq; //it is a constant which is always set to 2
+	//unsigned int iops = cfqd->cfq_slice_async_rq; //it is a constant which is always set to 2
+	unsigned int iops = cfqd->serving_group->iops;
+	//unsigned int iops = rgld->iops;
 
 	if(rgld->latency){
 		iops = (4-BETA) * iops + BETA * (rgld->latency_thrld/rgld->latency) * iops;
 		iops = (int)iops/4;
 	}
 
-	printk(KERN_INFO "threshold: %lu, current latency: %lu, iops: %u, slice_async_rq: %u\n",rgld->latency_thrld,rgld->latency,iops,cfqd->cfq_slice_async_rq);
+	printk(KERN_INFO "threshold: %lu, current latency: %lu, iops: %u, serving_group_weight:%u, serving_group_leaf_weight:%u, serving_group_iops: %u\n",
+			rgld->latency_thrld,rgld->latency,iops,cfqd->serving_group->weight,cfqd->serving_group->leaf_weight,cfqd->serving_group->iops);
+
+	if(iops > 16)
+		iops = 16;
 
 	//if(iops)
-		//cfqd->cfq_slice_async_rq = iops;
+		//rgld->iops = iops;
+	if(iops)
+		cfqd->serving_group->iops = iops;
 	return;
 }
 
@@ -76,8 +84,8 @@ static void calc_latency(struct regulator_data *rgld){
 	data_len = rgld->data_len;
 	rgld->data_len = 0;
 
-	rgld->latency_thrld = q->nr_requests * 1024; //128KB
-	rgld->latency = (4-ALPHA) * data_len + ALPHA * rgld->latency;
+	rgld->latency_thrld = q->nr_requests * 2 * 102400000; //128KB
+	rgld->latency = ((4-ALPHA) * data_len + ALPHA * rgld->latency)/4;
 	return;
 }
 
@@ -87,14 +95,15 @@ static int cfq_notification_handler (struct notifier_block *nb, unsigned long ac
 	//struct request_queue *q;
 	//struct regulator_data *rgld;
 
-	if(action != 2)
-		return 0;
+	if(action == 2){
+		if(rq){
+			rgld->data_len += rq->__data_len;
+			printk(KERN_INFO "rgld->data_len: %lu",rgld->data_len);
+		}
+	}
 
 	//rgld = (struct regulator_data *)container_of(q, struct regulator_data, q);
 
-	if(rq)
-		rgld->data_len += rq->__data_len;
-	printk(KERN_INFO "rgld->data_len: %lu",rgld->data_len);
 	return 0;
 }
 
@@ -105,8 +114,12 @@ static struct notifier_block cfq_notifier = {
 void feedback_timer(unsigned long int data)
 {
 	struct regulator_data *rgl_data;
+	//struct cfq_data *cfqd;
 
 	rgl_data = (struct regulator_data *)data;
+	//cfqd = rgld->q->elevator->elevator_data;
+	//rgl_data->iops = cfqd->serving_group->iops;
+
 	calc_latency(rgl_data);
 	update_iops(rgl_data);
 
@@ -118,6 +131,7 @@ static void init_regulator(struct regulator_data *rgld)
 	rgld->flag = false;
 	rgld->data_len = 0;
 	rgld->latency = 0;
+	rgld->iops = 2;
 	//spin_lock_init(&rgld->list_lck);
 	//INIT_LIST_HEAD(&rgld->dsp_req_head);
 

@@ -26,6 +26,8 @@ do
 	    echo "created blk cgroup $DIRECTORY$job"	  	
 	fi
 	
+	#8:0 for hard disk (sda)
+	#8:16 for ssd (sdb)
 	echo "8:0 $weight" > $DIRECTORY$job/blkio.weight_device
 	if [ $? -ne 0 ]
 	then
@@ -46,6 +48,7 @@ declare -a jobs
 JOBS=0
 run=false
 re='^[0-9]+$'
+fio=false
 while [ $# -ge 1 ]
 do
 	case $1 in
@@ -71,6 +74,13 @@ do
 	    ;;
 	    -r|--run_jobs)
 	    run=true
+	    if [ "$2" == "fio" ] ; then
+		fio=true
+		shift
+	    elif [ "$2" == "iozone" ] ; then
+		fio=false
+		shift	
+	    fi 	
 	    ;;
 	    *)
 	    error
@@ -93,7 +103,7 @@ if [ $? -ne 0 ]; then
 fi
 
 if $run ; then
-	./run_iozone.sh -g $JOBS
+	./run_iozone.sh -g $JOBS -t $fio
 fi
 
 #start_work() {
