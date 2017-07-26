@@ -44,9 +44,11 @@ Create block io cgroups script is used to create control groups
 along with their weights with the help of command line arguments
 
 For example the following command will create 3 cgroups with weights 
-100 200 300 respectively 
+250 501 750 respectively 
 
-$ ./create_blkio_cgroups.sh -g 3 -w 100 200 300 -r
+$ ./create_blkio_cgroups.sh -g 3 -w 250 501 750 -r
 
-At the end run option should be given to execute iozone test in each 
-cgroup
+-g is used to define number of groups to be created
+-w is used to mention weight of each group
+-r is used to mention the task to get executed in created cgroup 
+(fio or iozone)
