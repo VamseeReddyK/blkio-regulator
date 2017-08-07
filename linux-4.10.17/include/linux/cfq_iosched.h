@@ -295,6 +295,10 @@ struct cfq_group {
 	struct cfq_queue *async_cfqq[2][IOPRIO_BE_NR];
 	struct cfq_queue *async_idle_cfqq;
 
+	unsigned int group_no;
+	u64 iops;
+	unsigned long long start_time_ns;
+	unsigned long long end_time_ns;
 };
 
 struct cfq_io_cq {
@@ -305,6 +309,12 @@ struct cfq_io_cq {
 #ifdef CONFIG_CFQ_GROUP_IOSCHED
 	uint64_t		blkcg_serial_nr; /* the current blkcg serial */
 #endif
+};
+
+struct cfq_groups {
+	unsigned int count;
+	unsigned int weights[5];
+	unsigned int total;
 };
 
 /*
@@ -384,6 +394,8 @@ struct cfq_data {
 	u64 last_delayed_sync;
 
 	struct blocking_notifier_head cfq_notifier_list;
+
+	struct cfq_groups groups;
 };
 
 static struct cfq_group *cfq_get_next_cfqg(struct cfq_data *cfqd);

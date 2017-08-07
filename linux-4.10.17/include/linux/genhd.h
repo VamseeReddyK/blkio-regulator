@@ -208,6 +208,13 @@ struct gendisk {
 	struct badblocks *bb;
 };
 
+struct registered_devices {
+	char *type;
+	struct device *dev;
+	struct gendisk *disk;
+	struct list_head list;
+};
+
 static inline struct gendisk *part_to_disk(struct hd_struct *part)
 {
 	if (likely(part)) {
@@ -413,6 +420,7 @@ static inline void add_disk(struct gendisk *disk)
 extern void del_gendisk(struct gendisk *gp);
 extern struct gendisk *get_gendisk(dev_t dev, int *partno);
 extern struct block_device *bdget_disk(struct gendisk *disk, int partno);
+extern void printk_all_disks(struct list_head *blk_reg_head);
 
 extern void set_device_ro(struct block_device *bdev, int flag);
 extern void set_disk_ro(struct gendisk *disk, int flag);
