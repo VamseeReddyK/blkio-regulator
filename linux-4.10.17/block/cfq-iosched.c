@@ -579,6 +579,7 @@ static inline u64 cfqg_scale_charge(u64 charge,
 
 	/* charge / vfraction */
 	c <<= CFQ_SERVICE_SHIFT;
+
 	return div_u64(c, vfraction);
 }
 
@@ -680,7 +681,8 @@ cfq_set_prio_slice(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 	cfqq->slice_end = now + slice;
 	cfqq->allocated_slice = slice;
 	cfq_log_cfqq(cfqd, cfqq, "set_slice=%llu", cfqq->slice_end - now);
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d set_slice=%llu\n", cfqq->cfqg->weight, cfqq->pid, cfqq->slice_end - now);
 }
 
@@ -926,6 +928,22 @@ __cfq_group_service_tree_add(struct cfq_rb_root *st, struct cfq_group *cfqg)
 	rb_insert_color(&cfqg->rb_node, &st->rb);
 }
 
+static void
+__cfq_group_service_tree_print(struct cfq_rb_root *st)
+{
+	struct rb_root *root = &st->rb;
+	struct rb_node *node = rb_first(root);
+	struct cfq_group *cfqg = cfq_rb_first_group(st);
+	struct cfq_group *__cfqg;
+
+	while(node != NULL){
+		__cfqg = rb_entry_cfqg(node);
+		trace_printk("Traversal: weight: %d vdisktime: %llu vfraction: %u\n", __cfqg->weight, __cfqg->vdisktime, __cfqg->vfraction);
+		node = rb_next(node);
+	}
+	trace_printk("first group: weight: %d vdisktime: %llu vfraction: %u\n",cfqg->weight,cfqg->vdisktime, cfqg->vfraction);
+}
+
 /*
  * This has to be called only on activation of cfqg
  */
@@ -1020,12 +1038,14 @@ cfq_group_notify_queue_add(struct cfq_data *cfqd, struct cfq_group *cfqg)
 	if (n) {
 		__cfqg = rb_entry_cfqg(n);
 		cfqg->vdisktime = __cfqg->vdisktime + CFQ_IDLE_DELAY;
-		if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+		//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+		if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800)
 			trace_printk("cfq_group_notify_queue_add: weight: %d, vdisktime: %llu __cfqg->vdisktime: %llu\n",
 				cfqg->weight, cfqg->vdisktime, __cfqg->vdisktime);
 	} else{
 		cfqg->vdisktime = st->min_vdisktime;
-		if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+		//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+		if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800)
 			trace_printk("cfq_group_notify_queue_add: weight: %d vdisktime: %llu st->min_vdisktime\n",
 					cfqg->weight, cfqg->vdisktime, st->min_vdisktime);
 	}
@@ -1078,7 +1098,8 @@ cfq_group_notify_queue_del(struct cfq_data *cfqd, struct cfq_group *cfqg)
 		return;
 
 	cfq_log_cfqg(cfqd, cfqg, "del_from_rr group");
-	if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800)
 		trace_printk("weight: %d del_from_rr_group\n", cfqg->weight);
 	cfq_group_service_tree_del(st, cfqg);
 	cfqg->saved_wl_slice = 0;
@@ -1125,14 +1146,18 @@ static void cfq_group_served(struct cfq_data *cfqd, struct cfq_group *cfqg,
 	u64 used_sl, charge, unaccounted_sl = 0;
 	int nr_sync = cfqg->nr_cfqq - cfqg_busy_async_queues(cfqd, cfqg)
 			- cfqg->service_tree_idle.count;
-	unsigned int vfr;
+	unsigned int vfr = cfqg->vfraction;
 	u64 now = ktime_get_ns();
 
 	BUG_ON(nr_sync < 0);
 	used_sl = charge = cfq_cfqq_slice_usage(cfqq, &unaccounted_sl);
 
-	if (iops_mode(cfqd))
-		charge = cfqq->slice_dispatch;
+	if (iops_mode(cfqd)){
+		/* scaling charge to proportionally allocate disk time based on the weight */
+		//charge = cfqq->slice_dispatch;
+		charge = cfqq->slice_dispatch * 1000000000;
+		charge = div_u64(charge, cfqg->weight);
+	}
 	else if (!cfq_cfqq_sync(cfqq) && !nr_sync)
 		charge = cfqq->allocated_slice;
 
@@ -1142,14 +1167,22 @@ static void cfq_group_served(struct cfq_data *cfqd, struct cfq_group *cfqg,
 	 * update vdisktime and go back on.  The re-addition to the tree
 	 * will also update the weights as necessary.
 	 */
-	vfr = cfqg->vfraction;
+	
+	//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	if(cfqg->weight == 201 || cfqg->weight == 600 || cfqg->weight == 400 || cfqg->weight == 800)
+		__cfq_group_service_tree_print(st);
 	cfq_group_service_tree_del(st, cfqg);
-	if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800)
 		trace_printk("weight: %d previous vdisktime: %llu vfraction: %u charge: %llu\n", cfqg->weight, cfqg->vdisktime, cfqg->vfraction, charge);
 	cfqg->vdisktime += cfqg_scale_charge(charge, vfr);
-	if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800)
 		trace_printk("weight: %d  current vdisktime: %llu vfraction: %u\n", cfqg->weight, cfqg->vdisktime, cfqg->vfraction);
 	cfq_group_service_tree_add(st, cfqg);
+	//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800)
+		__cfq_group_service_tree_print(st);
 
 	/* This group is being expired. Save the context */
 	if (cfqd->workload_expires > now) {
@@ -1161,17 +1194,22 @@ static void cfq_group_served(struct cfq_data *cfqd, struct cfq_group *cfqg,
 
 	cfq_log_cfqg(cfqd, cfqg, "served: vt=%llu min_vt=%llu", cfqg->vdisktime,
 					st->min_vdisktime);
-	if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
+	if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800)
 		trace_printk("weight: %d served: vt=%llu min_vt=%llu\n", cfqg->weight, cfqg->vdisktime,
 			st->min_vdisktime);
 	cfq_log_cfqq(cfqq->cfqd, cfqq,
 		     "sl_used=%llu disp=%llu charge=%llu iops=%u sect=%lu",
 		     used_sl, cfqq->slice_dispatch, charge,
 		     iops_mode(cfqd), cfqq->nr_sectors);
-	if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750)
-		trace_printk("weight: %d pid: %d sl_used=%llu disp=%llu charge=%llu iops=%u sect=%lu\n",
-			 cfqg->weight, cfqq->pid, used_sl, cfqq->slice_dispatch, charge,
+	//if(cfqg->weight == 250 || cfqg->weight == 501 || cfqg->weight == 750){
+	if(cfqg->weight == 201 || cfqg->weight == 400 || cfqg->weight == 600 || cfqg->weight == 800){
+		trace_printk("weight: %d pid: %d sl_used=%llu sl_allocated=%llu disp=%llu charge=%llu iops=%u sect=%lu\n",
+			 cfqg->weight, cfqq->pid, used_sl, cfqq->allocated_slice, cfqq->slice_dispatch, charge,
 			 iops_mode(cfqd), cfqq->nr_sectors);
+		//trace_printk("cfqd->groups_rb_root.count: %u cfqd->groups_rb_root.weight_of_all_the_groups: %u",
+						//cfqd->groups_rb_root.count,cfqd->groups_rb_root.weight_of_all_the_groups);
+	}
 
 	cfqg_stats_update_timeslice_used(cfqg, used_sl, unaccounted_sl);
 	cfqg_stats_set_start_empty_time(cfqg);
@@ -2032,7 +2070,8 @@ static void cfq_resort_rr_list(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 static void cfq_add_cfqq_rr(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 {
 	cfq_log_cfqq(cfqd, cfqq, "add_to_rr");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d add_to_rr\n", cfqq->cfqg->weight, cfqq->pid);
 	BUG_ON(cfq_cfqq_on_rr(cfqq));
 	cfq_mark_cfqq_on_rr(cfqq);
@@ -2050,7 +2089,8 @@ static void cfq_add_cfqq_rr(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 static void cfq_del_cfqq_rr(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 {
 	cfq_log_cfqq(cfqd, cfqq, "del_from_rr");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d del_from_rr\n", cfqq->cfqg->weight, cfqq->pid);
 	BUG_ON(!cfq_cfqq_on_rr(cfqq));
 	cfq_clear_cfqq_on_rr(cfqq);
@@ -2160,7 +2200,8 @@ static void cfq_activate_request(struct request_queue *q, struct request *rq)
 	cfqd->rq_in_driver++;
 	cfq_log_cfqq(cfqd, RQ_CFQQ(rq), "activate rq, drv=%d",
 						cfqd->rq_in_driver);
-	if((RQ_CFQQ(rq))->cfqg->weight == 250 || (RQ_CFQQ(rq))->cfqg->weight == 501 || (RQ_CFQQ(rq))->cfqg->weight == 750)
+	//if((RQ_CFQQ(rq))->cfqg->weight == 250 || (RQ_CFQQ(rq))->cfqg->weight == 501 || (RQ_CFQQ(rq))->cfqg->weight == 750)
+	if((RQ_CFQQ(rq))->cfqg->weight == 201 || (RQ_CFQQ(rq))->cfqg->weight == 400 || (RQ_CFQQ(rq))->cfqg->weight == 600 || (RQ_CFQQ(rq))->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d activate rq, drv=%d\n", (RQ_CFQQ(rq))->cfqg->weight,
 					(RQ_CFQQ(rq))->pid, cfqd->rq_in_driver);
 	cfqd->last_position = blk_rq_pos(rq) + blk_rq_sectors(rq);
@@ -2174,7 +2215,8 @@ static void cfq_deactivate_request(struct request_queue *q, struct request *rq)
 	cfqd->rq_in_driver--;
 	cfq_log_cfqq(cfqd, RQ_CFQQ(rq), "deactivate rq, drv=%d",
 						cfqd->rq_in_driver);
-	if((RQ_CFQQ(rq))->cfqg->weight == 250 || (RQ_CFQQ(rq))->cfqg->weight == 501 || (RQ_CFQQ(rq))->cfqg->weight == 750)
+	//if((RQ_CFQQ(rq))->cfqg->weight == 250 || (RQ_CFQQ(rq))->cfqg->weight == 501 || (RQ_CFQQ(rq))->cfqg->weight == 750)
+	if((RQ_CFQQ(rq))->cfqg->weight == 201 || (RQ_CFQQ(rq))->cfqg->weight == 400 || (RQ_CFQQ(rq))->cfqg->weight == 600 || (RQ_CFQQ(rq))->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d deactivate rq, drv=%d\n", (RQ_CFQQ(rq))->cfqg->weight,
 					(RQ_CFQQ(rq))->pid, cfqd->rq_in_driver);
 }
@@ -2305,7 +2347,8 @@ static void __cfq_set_active_queue(struct cfq_data *cfqd,
 	if (cfqq) {
 		cfq_log_cfqq(cfqd, cfqq, "set_active wl_class:%d wl_type:%d",
 				cfqd->serving_wl_class, cfqd->serving_wl_type);
-		if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 				trace_printk("weight: %d pid: %d set_active wl_class:%d wl_type:%d\n", cfqq->cfqg->weight, cfqq->pid,
 						cfqd->serving_wl_class, cfqd->serving_wl_type);
 		cfqg_stats_update_avg_queue_size(cfqq->cfqg);
@@ -2336,7 +2379,8 @@ __cfq_slice_expired(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 		    bool timed_out)
 {
 	cfq_log_cfqq(cfqd, cfqq, "slice expired t=%d", timed_out);
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d slice_expired t=%d\n", cfqq->cfqg->weight, cfqq->pid,
 				timed_out);
 	if (cfq_cfqq_wait_request(cfqq))
@@ -2363,7 +2407,8 @@ __cfq_slice_expired(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 		else
 			cfqq->slice_resid = cfqq->slice_end - ktime_get_ns();
 		cfq_log_cfqq(cfqd, cfqq, "resid=%lld", cfqq->slice_resid);
-		if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d resid=%lld\n", cfqq->cfqg->weight, cfqq->pid,
 					cfqq->slice_resid);
 	}
@@ -2591,7 +2636,8 @@ static bool cfq_should_idle(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 	   !cfq_io_thinktime_big(cfqd, &st->ttime, false))
 		return true;
 	cfq_log_cfqq(cfqd, cfqq, "Not idling. st->count:%d", st->count);
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d Not idling. st->count:%d\n", cfqq->cfqg->weight, cfqq->pid,
 				st->count);
 	return false;
@@ -2649,7 +2695,8 @@ static void cfq_arm_slice_timer(struct cfq_data *cfqd)
 	    (cfqq->slice_end - now < cic->ttime.ttime_mean)) {
 		cfq_log_cfqq(cfqd, cfqq, "Not idling. think_time:%llu",
 			     cic->ttime.ttime_mean);
-		if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d Not idling. think_time:%llu\n", cfqq->cfqg->weight, cfqq->pid,
 					cic->ttime.ttime_mean);
 		return;
@@ -2676,7 +2723,8 @@ static void cfq_arm_slice_timer(struct cfq_data *cfqd)
 	cfqg_stats_set_start_idle_time(cfqq->cfqg);
 	cfq_log_cfqq(cfqd, cfqq, "arm_idle: %llu group_idle: %d", sl,
 			group_idle ? 1 : 0);
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d arm_idle: %llu group_idle: %d\n", cfqq->cfqg->weight, cfqq->pid,
 				sl, group_idle ? 1: 0);
 }
@@ -2690,7 +2738,8 @@ static void cfq_dispatch_insert(struct request_queue *q, struct request *rq)
 	struct cfq_queue *cfqq = RQ_CFQQ(rq);
 
 	cfq_log_cfqq(cfqd, cfqq, "dispatch_insert");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d dispatch_insert\n", cfqq->cfqg->weight, cfqq->pid);
 	cfqq->next_rq = cfq_find_next_rq(cfqd, cfqq, rq);
 	cfq_remove_request(rq);
@@ -2918,7 +2967,8 @@ static void cfq_choose_cfqg(struct cfq_data *cfqd)
 
 	if(cfqd->serving_group && cfqd->serving_group != cfqg){
 		cfqd->serving_group->end_time_ns = now;
-		if(cfqd->serving_group->weight == 250 || cfqd->serving_group->weight == 501 || cfqd->serving_group->weight == 750)
+		//if(cfqd->serving_group->weight == 250 || cfqd->serving_group->weight == 501 || cfqd->serving_group->weight == 750)
+		if(cfqd->serving_group->weight == 201 || cfqd->serving_group->weight == 400 || cfqd->serving_group->weight == 600 || cfqd->serving_group->weight == 800)
 			trace_printk("\nweight: %d start_time_ns: %lu end_time_ns: %lu time_spent: %lu\n\n", cfqd->serving_group->weight,
 				cfqd->serving_group->start_time_ns, cfqd->serving_group->end_time_ns, cfqd->serving_group->end_time_ns-cfqd->serving_group->start_time_ns);
 		cfqg->start_time_ns = now;
@@ -3217,7 +3267,8 @@ static bool cfq_dispatch_request(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 		rq = cfqq->next_rq;
 	else{
 		cfq_log_cfqq(cfqq->cfqd, cfqq, "fifo=%p", rq);
-		if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d fifo=%p\n", cfqq->cfqg->weight, cfqq->pid,rq);
 	}
 
@@ -3276,7 +3327,8 @@ static int cfq_dispatch_requests(struct request_queue *q, int force)
 	}
 
 	cfq_log_cfqq(cfqd, cfqq, "dispatched a request");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d dispatched a request\n", cfqq->cfqg->weight, cfqq->pid);
 	return 1;
 }
@@ -3300,7 +3352,8 @@ static void cfq_put_queue(struct cfq_queue *cfqq)
 		return;
 
 	cfq_log_cfqq(cfqd, cfqq, "put_queue");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d put_queue\n", cfqq->cfqg->weight, cfqq->pid);
 	BUG_ON(rb_first(&cfqq->sort_list));
 	BUG_ON(cfqq->allocated[READ] + cfqq->allocated[WRITE]);
@@ -3489,7 +3542,8 @@ static bool check_blkcg_changed(struct cfq_io_cq *cic, struct bio *bio)
 	cfqq = cic_to_cfqq(cic, false);
 	if (cfqq) {
 		cfq_log_cfqq(cfqd, cfqq, "changed cgroup");
-		if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 				trace_printk("weight: %d pid: %d changed cgroup\n", cfqq->cfqg->weight, cfqq->pid);
 		cic_set_cfqq(cic, NULL, false);
 		cfq_put_queue(cfqq);
@@ -3498,7 +3552,8 @@ static bool check_blkcg_changed(struct cfq_io_cq *cic, struct bio *bio)
 	cfqq = cic_to_cfqq(cic, true);
 	if (cfqq) {
 		cfq_log_cfqq(cfqd, cfqq, "changed cgroup");
-		if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 				trace_printk("weight: %d pid: %d changed cgroup\n", cfqq->cfqg->weight, cfqq->pid);
 		cic_set_cfqq(cic, NULL, true);
 		cfq_put_queue(cfqq);
@@ -3573,7 +3628,8 @@ cfq_get_queue(struct cfq_data *cfqd, bool is_sync, struct cfq_io_cq *cic,
 	cfq_init_prio_data(cfqq, cic);
 	cfq_link_cfqq_cfqg(cfqq, cfqg);
 	cfq_log_cfqq(cfqd, cfqq, "alloced");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d alloced\n", cfqq->cfqg->weight, cfqq->pid);
 	if (async_cfqq) {
 		/* a new async queue is created, pin and remember */
@@ -3674,7 +3730,8 @@ cfq_update_idle_window(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 
 	if (old_idle != enable_idle) {
 		cfq_log_cfqq(cfqd, cfqq, "idle=%d", enable_idle);
-		if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+		if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 				trace_printk("weight: %d pid: %d idle=%d\n", cfqq->cfqg->weight, cfqq->pid, enable_idle);
 		if (enable_idle)
 			cfq_mark_cfqq_idle_window(cfqq);
@@ -3773,7 +3830,8 @@ static void cfq_preempt_queue(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 	enum wl_type_t old_type = cfqq_type(cfqd->active_queue);
 
 	cfq_log_cfqq(cfqd, cfqq, "preempt");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d preempt\n", cfqq->cfqg->weight, cfqq->pid);
 	cfq_slice_expired(cfqd, 1);
 
@@ -3856,7 +3914,8 @@ static void cfq_insert_request(struct request_queue *q, struct request *rq)
 	struct cfq_queue *cfqq = RQ_CFQQ(rq);
 
 	cfq_log_cfqq(cfqd, cfqq, "insert_request");
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d insert_request\n", cfqq->cfqg->weight, cfqq->pid);
 	cfq_init_prio_data(cfqq, RQ_CIC(rq));
 
@@ -3953,7 +4012,8 @@ static void cfq_completed_request(struct request_queue *q, struct request *rq)
 	u64 now = ktime_get_ns();
 
 	cfq_log_cfqq(cfqd, cfqq, "complete rqnoidle %d", req_noidle(rq));
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 			trace_printk("weight: %d pid: %d complete rqnoidle %d\n", cfqq->cfqg->weight, cfqq->pid,req_noidle(rq));
 	cfq_update_hw_tag(cfqd);
 
@@ -4024,7 +4084,8 @@ static void cfq_completed_request(struct request_queue *q, struct request *rq)
 			cfqq->slice_end = now + extend_sl;
 			cfq_mark_cfqq_wait_busy(cfqq);
 			cfq_log_cfqq(cfqd, cfqq, "will busy wait");
-			if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+			//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+			if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 					trace_printk("weight: %d pid: %d will busy wait\n", cfqq->cfqg->weight, cfqq->pid);
 		}
 
@@ -4131,7 +4192,8 @@ cfq_merge_cfqqs(struct cfq_data *cfqd, struct cfq_io_cq *cic,
 		struct cfq_queue *cfqq)
 {
 	cfq_log_cfqq(cfqd, cfqq, "merging with queue %p", cfqq->new_cfqq);
-	if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+	if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 		trace_printk("weight: %d pid: %d merging with queue %p\n", cfqq->cfqg->weight, cfqq->pid, cfqq->new_cfqq);
 	cic_set_cfqq(cic, cfqq->new_cfqq, 1);
 	cfq_mark_cfqq_coop(cfqq->new_cfqq);
@@ -4191,7 +4253,8 @@ new_queue:
 		 */
 		if (cfq_cfqq_coop(cfqq) && cfq_cfqq_split_coop(cfqq)) {
 			cfq_log_cfqq(cfqd, cfqq, "breaking apart cfqq");
-			if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+			//if(cfqq->cfqg->weight == 250 || cfqq->cfqg->weight == 501 || cfqq->cfqg->weight == 750)
+			if(cfqq->cfqg->weight == 201 || cfqq->cfqg->weight == 400 || cfqq->cfqg->weight == 600 || cfqq->cfqg->weight == 800)
 				trace_printk("weight: %d pid: %d breaking apart cfqq\n", cfqq->cfqg->weight, cfqq->pid);
 			cfqq = split_cfqq(cic, cfqq);
 			if (!cfqq)

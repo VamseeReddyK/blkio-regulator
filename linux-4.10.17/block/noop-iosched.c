@@ -7,15 +7,41 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/init.h>
+#include <linux/notifier.h>
 
 struct noop_data {
 	struct list_head queue;
+	struct blocking_notifier_head noop_notifier_list;
 };
+
+void noop_register_notifier(struct request_queue *q, struct notifier_block *nb){
+	struct noop_data *nd = q->elevator->elevator_data;
+
+	if(nd != NULL)
+		blocking_notifier_chain_register(&nd->noop_notifier_list,nb);
+}
+EXPORT_SYMBOL(noop_register_notifier);
+
+void noop_unregister_notifier(struct request_queue *q, struct notifier_block *nb){
+	struct noop_data *nd = q->elevator->elevator_data;
+
+	if(nd != NULL)
+		blocking_notifier_chain_unregister(&nd->noop_notifier_list,nb);
+}
+EXPORT_SYMBOL(noop_unregister_notifier);
+
+void noop_notifier_call_chain(struct request_queue *q, unsigned long action){
+	struct noop_data *nd = q->elevator->elevator_data;
+
+	if(nd != NULL)
+		blocking_notifier_call_chain(&nd->noop_notifier_list,action,q);
+}
 
 static void noop_merged_requests(struct request_queue *q, struct request *rq,
 				 struct request *next)
 {
 	list_del_init(&next->queuelist);
+	noop_notifier_call_chain(q,2);
 }
 
 static int noop_dispatch(struct request_queue *q, int force)
@@ -27,6 +53,7 @@ static int noop_dispatch(struct request_queue *q, int force)
 	if (rq) {
 		list_del_init(&rq->queuelist);
 		elv_dispatch_sort(q, rq);
+		noop_notifier_call_chain(q,1);
 		return 1;
 	}
 	return 0;
@@ -37,6 +64,7 @@ static void noop_add_request(struct request_queue *q, struct request *rq)
 	struct noop_data *nd = q->elevator->elevator_data;
 
 	list_add_tail(&rq->queuelist, &nd->queue);
+	noop_notifier_call_chain(q,0);
 }
 
 static struct request *
@@ -46,7 +74,9 @@ noop_former_request(struct request_queue *q, struct request *rq)
 
 	if (rq->queuelist.prev == &nd->queue)
 		return NULL;
+	noop_notifier_call_chain(q,3);
 	return list_prev_entry(rq, queuelist);
+
 }
 
 static struct request *
@@ -56,6 +86,7 @@ noop_latter_request(struct request_queue *q, struct request *rq)
 
 	if (rq->queuelist.next == &nd->queue)
 		return NULL;
+	noop_notifier_call_chain(q,4);
 	return list_next_entry(rq, queuelist);
 }
 
