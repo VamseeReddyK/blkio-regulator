@@ -813,37 +813,6 @@ void __init printk_all_partitions(void)
 	class_dev_iter_exit(&iter);
 }
 
-void printk_all_disks(struct list_head *blk_reg_head)
-{
-	struct class_dev_iter iter;
-	struct device *dev;
-	int i=0;
-
-	class_dev_iter_init(&iter, &block_class, NULL, &disk_type);
-	while ((dev = class_dev_iter_next(&iter))) {
-		struct gendisk *disk = dev_to_disk(dev);
-		struct registered_devices *blk_reg_dev;
-
-		/*
-		 * Don't show empty devices or things that have been
-		 * suppressed
-		 */
-		if (get_capacity(disk) == 0 ||
-			(disk->flags & GENHD_FL_SUPPRESS_PARTITION_INFO))
-			continue;
-
-		blk_reg_dev = (struct registered_devices *)
-				kmalloc(sizeof(struct registered_devices), GFP_KERNEL);
-
-		blk_reg_dev->dev = dev;
-		blk_reg_dev->disk = disk;
-		list_add_tail(&blk_reg_dev->list,blk_reg_head);
-
-	}
-	class_dev_iter_exit(&iter);
-}
-EXPORT_SYMBOL(printk_all_disks);
-
 #ifdef CONFIG_PROC_FS
 /* iterator */
 static void *disk_seqf_start(struct seq_file *seqf, loff_t *pos)
