@@ -32,6 +32,17 @@ config IOSCHED_CFQ
 
 	  This is the default I/O scheduler.
 
+config IOSCHED_CFQ_CASS
+	tristate "CASS CFQ I/O scheduler"
+	default y
+	---help---
+	  The CFQ I/O scheduler tries to distribute bandwidth equally
+	  among all processes in the system. It should provide a fair
+	  and low latency working environment, suitable for both desktop
+	  and server systems.
+
+	  This is the default I/O scheduler.
+
 config CFQ_GROUP_IOSCHED
 	bool "CFQ Group Scheduling support"
 	depends on IOSCHED_CFQ && BLK_CGROUP
@@ -41,7 +52,7 @@ config CFQ_GROUP_IOSCHED
 
 choice
 	prompt "Default I/O scheduler"
-	default DEFAULT_CFQ
+	default DEFAULT_CFQ_CASS
 	help
 	  Select the I/O scheduler which will be used by default for all
 	  block devices.
@@ -52,6 +63,9 @@ choice
 	config DEFAULT_CFQ
 		bool "CFQ" if IOSCHED_CFQ=y
 
+	config DEFAULT_CFQ_CASS
+		bool "CASS-CFQ" if IOSCHED_CFQ_CASS=y
+
 	config DEFAULT_NOOP
 		bool "No-op"
 
@@ -61,6 +75,7 @@ config DEFAULT_IOSCHED
 	string
 	default "deadline" if DEFAULT_DEADLINE
 	default "cfq" if DEFAULT_CFQ
+	default "cass-cfq" if DEFAULT_CFQ_CASS
 	default "noop" if DEFAULT_NOOP
 
 endmenu
